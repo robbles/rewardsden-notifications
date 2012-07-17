@@ -95,13 +95,13 @@ io.sockets.on('connection', function (socket) {
     if('customId' in client) {
       delete clients[client.customId];
       logger.log('info', 'Disconnect:: rUser = '+client.customId);
+
+      numClients = numClients - 1;
+      logger.log('info', 'numClients is now ' + numClients);
     }
     // Remove socket entry
     delete sockets[socket.id];
 
-    numClients = numClients - 1;
-    logger.log('info', 'numClients is now ' + numClients);
-    
     adminStatUpdate();
 
   }); // end the disconnect
