@@ -54,13 +54,21 @@ io.sockets.on('connection', function (socket) {
 
     //Check for existing connection from this ID JUST in case it did not get removed from the "discconnect" call  
     if(uid in clients) {
-      try {
-        // disconnect the client
-        logger.log('info', 'disconnecting socket ' + clients[uid].clientId);
-        clients[uid].socket.disconnect();
-      } catch(err) {}
+        if(clients[uid].clientId === socket.id) {
+          // Same client, they just re-sent the rd-storeClientInfo message
+          logger.log('info', 'Received repeated rd-storeClientInfo message from ' + socket.id);
+        } else {
+          // disconnect other client
+          logger.log('info', 'Disconnecting old client ' + clients[uid].clientId);
+          try {
+            clients[uid].socket.disconnect();
+          } catch(err) {}
+        }
 
       delete clients[uid];
+    } else {
+      numClients = numClients + 1;
+      logger.log('info', 'numClients is now ' + numClients);
     }
 
     // Create new client record in the array
@@ -70,8 +78,6 @@ io.sockets.on('connection', function (socket) {
     client.clientId         = socket.id;
       
     clients[uid] = client;
-    numClients = numClients + 1;
-    logger.log('info', 'numClients is now ' + numClients);
     logger.log('info', 'New Connection rUser = '+client.customId+' from API Key ='+client.apiKey);
   });
 
@@ -125,9 +131,6 @@ function adminStatUpdate(data) {
     logger.log('info', "admin message sent");
   }
 }
-
-
-
 
 // for API server tech.rewardsden.com
 var phpServer = require('http').createServer(handler),
