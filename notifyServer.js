@@ -1,6 +1,7 @@
 var util = require("util"),
     io = require('socket.io').listen(8080),
     fs = require('fs'),
+    path = require('path'),
     os = require('os'),
     url = require('url');
 
@@ -11,12 +12,16 @@ io.set('log level', 2);
 var repeatNotifyDelay = 1000;
 var repeatNotifyMax = 30;
 
+// log file location
+var logfile = path.existsSync('/rewardsden')?
+  '/rewardsden/nodeServer.log' : './nodeServer.log';
+
 //Create the logger
 var winston = require('winston');
 var logger = new (winston.Logger)({
     transports: [
       new (winston.transports.Console)(),
-      new (winston.transports.File)({ filename: '/rewardsden/nodeServer.log' })
+      new (winston.transports.File)({ filename: logfile })
     ]
   });
 var repeatNotifyDelay = 1000;
@@ -38,43 +43,43 @@ var numLoggedInHubs = 0;
 
 //Run on every connection
 io.sockets.on('connection', function (socket) {
-  logger.log('info', '*** New Hub Instance: ' + socket.id);
-  console.log("*** New Hub Instance: " + socket.id);  
+  logger.log('info', 'New Hub Instance: ' + socket.id);
 
   var client = {socket: socket};
   sockets[socket.id] = client;
 
   //Function to store connection info to the clients array
   socket.on('rd-storeClientInfo', function (data) {
-    console.log('Client ' + socket.id + ' has sent their data - uid = ' + data.ruserId);
-
     var uid = data.ruserId;
 
     //Check for existing connection from this ID JUST in case it did not get removed from the "discconnect" call  
     if(uid in clients) {
+      try {
+        // disconnect the client
+        logger.log('info', 'disconnecting socket ' + clients[uid].clientId);
+        clients[uid].socket.disconnect();
+      } catch(err) {}
+
       delete clients[uid];
     }
 
     // Create new client record in the array
     client.customId         = uid;
     client.apiKey           = data.apiKey;
-    client.allSocket        = socket;
+    client.socket        = socket;
     client.clientId         = socket.id;
       
     clients[uid] = client;
     numClients = numClients + 1;
-    console.log('numClients is now ' + numClients);
-
-    console.log("*** New Connection rUser= "+client.customId);
-    console.log(client);
-    logger.log('info', '*** New Connection rUser = '+client.customId+' Came from API Key ='+client.apiKey);
+    logger.log('info', 'numClients is now ' + numClients);
+    logger.log('info', 'New Connection rUser = '+client.customId+' from API Key ='+client.apiKey);
   });
 
   //Tracking hub open and close
   socket.on('rd-hubStatusTrack', function (data) {
-    console.log('rd-hubStatusTrack: ' + data);
+    logger.log('info', 'rd-hubStatusTrack: ' + data);
     numOpenHubs = numOpenHubs + parseInt(data, 10);
-    console.log('numOpenHubs is now ' + numOpenHubs);
+    logger.log('info', 'numOpenHubs is now ' + numOpenHubs);
 
     adminStatUpdate();
   });
@@ -84,16 +89,18 @@ io.sockets.on('connection', function (socket) {
 
   //Anytime user disconnects / refreshes the page
   socket.on('disconnect', function (data) {
-    console.log("*** Socket disconnect:: id = " + socket.id);
+    logger.log('info', "Socket disconnect:: id = " + socket.id);
 
     // Removes the client entry from clients if we have the uid already
     if('customId' in client) {
       delete clients[client.customId];
-      console.log("*** Disconnect:: userId = "+client.customId);
-      logger.log('info', '*** Disconnect:: rUser = '+client.customId);
+      logger.log('info', 'Disconnect:: rUser = '+client.customId);
     }
     // Remove socket entry
     delete sockets[socket.id];
+
+    numClients = numClients - 1;
+    logger.log('info', 'numClients is now ' + numClients);
     
     adminStatUpdate();
 
@@ -114,8 +121,8 @@ function adminStatUpdate(data) {
       openHubs: numOpenHubs,
       clients: numClients
     };
-    c.allSocket.emit('rd-adminUpdate', message);
-    console.log("admin message sent");
+    c.socket.emit('rd-adminUpdate', message);
+    logger.log('info', "admin message sent");
   }
 }
 
@@ -138,18 +145,16 @@ function handler (req, res) {
   var text        = query.text;
   var points      = query.points;
   var userId      = query.id;
-  console.log('Request');
-  console.log(query);
-  console.log(userId);
+  logger.log('info', 'Request: ' + JSON.stringify(query));
   
   repeatUntil(function() {
     if(userId in clients) {
       var c = clients[userId];
-      c.allSocket.emit('rd-notify',{rdResponseText: text, rdPoints: points});
-      console.log("*** Notification went to uId "+userId+" Text = "+text+" Points = "+points);
-      logger.log('info', '*** Notification went to rUser = '+userId+' Text = '+text+' points = '+points);
+      c.socket.emit('rd-notify',{rdResponseText: text, rdPoints: points});
+      logger.log('info', 'Notification went to rUser = '+userId+' Text = '+text+' points = '+points);
       return true;
     }
+    logger.log('info', 'client ' + userId + ' not found, retrying in ' + repeatNotifyDelay);
     return false;
   }, repeatNotifyDelay, repeatNotifyMax);
 
