@@ -118,7 +118,7 @@ function adminStatUpdate(data) {
     var c = clients.admin;
     
     var message = {
-      activeHubs: numActiveHubs,
+      activeHubs: Object.keys(openHubs).length,
       loggedInHubs: numLoggedInHubs,
       openHubs: Object.keys(openHubs).length,
       clients: Object.keys(clients).length,
