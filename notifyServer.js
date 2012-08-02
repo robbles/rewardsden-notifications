@@ -30,10 +30,7 @@ var repeatNotifyMax = 30;
 // Store all the current connections by user ID and socket ID
 var clients = Object.create(null);
 var sockets = Object.create(null);
-
-//Store current OPEN hubs
-var numOpenHubs = 0;
-var numActiveHubs = 0;
+var openHubs = Object.create(null);
 
 //Store current logged in hubs
 var numLoggedInHubs = 0;
@@ -79,8 +76,13 @@ io.sockets.on('connection', function (socket) {
   //Tracking hub open and close
   socket.on('rd-hubStatusTrack', function (data) {
     logger.log('info', 'rd-hubStatusTrack: ' + data);
-    numOpenHubs = numOpenHubs + parseInt(data, 10);
-    logger.log('info', 'numOpenHubs is now ' + numOpenHubs);
+    var action = parseInt(data, 10);
+    if(action == 1) { // Hub opened
+      openHubs[socket.id] = true;
+    } else { // Hub closed
+      delete openHubs[socket.id];
+    }
+    logger.log('info', 'numOpenHubs is now ' + Object.keys(openHubs).length);
 
     adminStatUpdate();
   });
@@ -118,8 +120,9 @@ function adminStatUpdate(data) {
     var message = {
       activeHubs: numActiveHubs,
       loggedInHubs: numLoggedInHubs,
-      openHubs: numOpenHubs,
-      clients: Object.keys(clients).length
+      openHubs: Object.keys(openHubs).length,
+      clients: Object.keys(clients).length,
+      connections: Object.keys(sockets).length
     };
     c.socket.emit('rd-adminUpdate', message);
     logger.log('info', "admin message sent");
