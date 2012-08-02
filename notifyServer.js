@@ -31,9 +31,6 @@ var repeatNotifyMax = 30;
 var clients = Object.create(null);
 var sockets = Object.create(null);
 
-// Store open client connections that have authenticated
-var numClients = 0;
-
 //Store current OPEN hubs
 var numOpenHubs = 0;
 var numActiveHubs = 0;
@@ -66,9 +63,6 @@ io.sockets.on('connection', function (socket) {
         }
 
       delete clients[uid];
-    } else {
-      numClients = numClients + 1;
-      logger.log('info', 'numClients is now ' + numClients);
     }
 
     // Create new client record in the array
@@ -79,6 +73,7 @@ io.sockets.on('connection', function (socket) {
       
     clients[uid] = client;
     logger.log('info', 'New Connection rUser = '+client.customId+' from API Key ='+client.apiKey);
+    logger.log('info', 'numClients is now ' + Object.keys(clients).length);
   });
 
   //Tracking hub open and close
@@ -102,8 +97,7 @@ io.sockets.on('connection', function (socket) {
       delete clients[client.customId];
       logger.log('info', 'Disconnect:: rUser = '+client.customId);
 
-      numClients = numClients - 1;
-      logger.log('info', 'numClients is now ' + numClients);
+      logger.log('info', 'numClients is now ' + Object.keys(clients).length);
     }
     // Remove socket entry
     delete sockets[socket.id];
@@ -125,7 +119,7 @@ function adminStatUpdate(data) {
       activeHubs: numActiveHubs,
       loggedInHubs: numLoggedInHubs,
       openHubs: numOpenHubs,
-      clients: numClients
+      clients: Object.keys(clients).length
     };
     c.socket.emit('rd-adminUpdate', message);
     logger.log('info', "admin message sent");
