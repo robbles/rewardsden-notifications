@@ -71,6 +71,11 @@ io.sockets.on('connection', function (socket) {
     clients[uid] = client;
     logger.log('info', 'New Connection rUser = '+client.customId+' from API Key ='+client.apiKey);
     logger.log('info', 'numClients is now ' + Object.keys(clients).length);
+
+    if(uid === 'admin') {
+      // Send update to admin
+      adminStatUpdate();
+    }
   });
 
   //Tracking hub open and close
@@ -87,7 +92,7 @@ io.sockets.on('connection', function (socket) {
     adminStatUpdate();
   });
   
-  //Run admin stats Update on any page load
+  // Run admin stats Update for every new connection
   adminStatUpdate();
 
   //Anytime user disconnects / refreshes the page
@@ -104,6 +109,7 @@ io.sockets.on('connection', function (socket) {
     // Remove socket entry
     delete sockets[socket.id];
 
+    // Run adminStatUpdate for every disconnect
     adminStatUpdate();
 
   }); // end the disconnect
@@ -118,11 +124,11 @@ function adminStatUpdate(data) {
     var c = clients.admin;
     
     var message = {
-      activeHubs: Object.keys(openHubs).length,
-      loggedInHubs: numLoggedInHubs,
-      openHubs: Object.keys(openHubs).length,
-      clients: Object.keys(clients).length,
-      connections: Object.keys(sockets).length
+      activeHubs: Object.keys(sockets).length, // Number of loaded hubs (connections)
+      loggedInHubs: numLoggedInHubs, // Number of hubs where the user has logged in and opened  the hub
+      openHubs: Object.keys(openHubs).length, // Number of open hubs
+      clients: Object.keys(clients).length, // Number of logged-in users
+      connections: Object.keys(sockets).length // Number of socket connections
     };
     c.socket.emit('rd-adminUpdate', message);
     logger.log('info', "admin message sent");
