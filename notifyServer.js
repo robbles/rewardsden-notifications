@@ -121,6 +121,9 @@ var onSocketConnection = function (socket) {
     // Remove socket entry
     delete sockets[socket.id];
 
+    // Remove hub entry if present
+    delete openHubs[socket.id];
+
     // Run adminStatUpdate for every disconnect
     adminStatUpdate();
 
