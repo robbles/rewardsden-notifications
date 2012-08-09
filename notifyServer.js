@@ -1,12 +1,10 @@
 var util = require("util"),
-    io = require('socket.io').listen(8080),
+    io = require('socket.io'),
+    http = require('http'),
     fs = require('fs'),
     path = require('path'),
     os = require('os'),
     url = require('url');
-
-// Configure socket.io
-io.set('log level', 2);
 
 // How often and how many times to attempt to notify a client
 var repeatNotifyDelay = 1000;
@@ -27,6 +25,20 @@ var logger = new (winston.Logger)({
 var repeatNotifyDelay = 1000;
 var repeatNotifyMax = 30;
 
+// Load key and certificate for HTTPS
+var options = {
+  key: fs.readFileSync(__dirname + '/ssl/ssl.key'),
+  cert: fs.readFileSync(__dirname + '/ssl/ssl.crt')
+};
+
+// Configure socket.io server
+wsServer = io.listen(8080);
+wsServer.set('log level', 2);
+
+// HTTPS version
+wsServerSecure = io.listen(9080, options);
+wsServerSecure.set('log level', 2);
+
 // Store all the current connections by user ID and socket ID
 var clients = Object.create(null);
 var sockets = Object.create(null);
@@ -36,7 +48,7 @@ var openHubs = Object.create(null);
 var numLoggedInHubs = 0;
 
 //Run on every connection
-io.sockets.on('connection', function (socket) {
+var onSocketConnection = function (socket) {
   logger.log('info', 'New Hub Instance: ' + socket.id);
 
   var client = {socket: socket};
@@ -114,7 +126,10 @@ io.sockets.on('connection', function (socket) {
 
   }); // end the disconnect
 
-}); // Close the main connection
+}; // Close the main connection
+
+wsServer.sockets.on('connection', onSocketConnection);
+wsServerSecure.sockets.on('connection', onSocketConnection);
 
 
 //Admin Update Sender
@@ -136,9 +151,7 @@ function adminStatUpdate(data) {
 }
 
 // for API server tech.rewardsden.com
-var phpServer = require('http').createServer(handler),
-  me = require('socket.io').listen(phpServer),
-  him = require('fs');
+var phpServer = http.createServer(handler);
 phpServer.listen(8081);
 var url  = require('url');
 
