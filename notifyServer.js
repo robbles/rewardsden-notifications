@@ -25,19 +25,22 @@ var logger = new (winston.Logger)({
 var repeatNotifyDelay = 1000;
 var repeatNotifyMax = 30;
 
-// Load key and certificate for HTTPS
-var options = {
-  key: fs.readFileSync(__dirname + '/ssl/ssl.key'),
-  cert: fs.readFileSync(__dirname + '/ssl/ssl.crt')
-};
-
 // Configure socket.io server
 wsServer = io.listen(8080);
 wsServer.set('log level', 2);
 
-// HTTPS version
-wsServerSecure = io.listen(9080, options);
-wsServerSecure.set('log level', 2);
+var secure = path.existsSync('/ssl/ssl.key');
+if(secure) {
+  // Load key and certificate for HTTPS
+  var options = {
+    key: fs.readFileSync(__dirname + '/ssl/ssl.key'),
+    cert: fs.readFileSync(__dirname + '/ssl/ssl.crt')
+  };
+
+  // HTTPS version
+  wsServerSecure = io.listen(9080, options);
+  wsServerSecure.set('log level', 2);
+}
 
 // Store all the current connections by user ID and socket ID
 var clients = Object.create(null);
@@ -132,22 +135,24 @@ var onSocketConnection = function (socket) {
 }; // Close the main connection
 
 wsServer.sockets.on('connection', onSocketConnection);
-wsServerSecure.sockets.on('connection', onSocketConnection);
-
+if(secure) {
+  wsServerSecure.sockets.on('connection', onSocketConnection);
+}
 
 //Admin Update Sender
 function adminStatUpdate(data) { 
   // Get admin connection
   if('admin' in clients) {
     var c = clients.admin;
-    
+
     var message = {
-      activeHubs: Object.keys(sockets).length, // Number of loaded hubs (connections)
-      loggedInHubs: numLoggedInHubs, // Number of hubs where the user has logged in and opened  the hub
-      openHubs: Object.keys(openHubs).length, // Number of open hubs
-      clients: Object.keys(clients).length, // Number of logged-in users
-      connections: Object.keys(sockets).length // Number of socket connections
+      activeHubs: Object.keys(sockets).length,  // Number of loaded hubs (connections)
+      loggedInHubs: numLoggedInHubs,            // Number of hubs where the user has logged in and opened  the hub
+      openHubs: Object.keys(openHubs).length,   // Number of open hubs
+      clients: Object.keys(clients).length,     // Number of logged-in users
+      connections: Object.keys(sockets).length  // Number of socket connections
     };
+    console.log(message);
     c.socket.emit('rd-adminUpdate', message);
     logger.log('info', "admin message sent");
   }
