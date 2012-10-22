@@ -27,7 +27,7 @@ var logger = new (winston.Logger)({
 wsServer = io.listen(8080);
 wsServer.set('log level', 2);
 
-var secure = path.existsSync('/ssl/ssl.key');
+var secure = path.existsSync(__dirname + '/ssl/ssl.key');
 if(secure) {
   // Load key and certificate for HTTPS
   var options = {
@@ -36,8 +36,10 @@ if(secure) {
   };
 
   // HTTPS version
-  wsServerSecure = io.listen(8443, options);
-  wsServerSecure.set('log level', 2);
+  var securePort = 8443;
+  console.log('Starting secure notifications server on port ' + securePort);
+  wsServerSecure = io.listen(securePort, options);
+  wsServerSecure.set('log level', 1);
 }
 
 // Store all the current connections by user ID and socket ID
