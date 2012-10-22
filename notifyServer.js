@@ -55,7 +55,8 @@ var onSocketConnection = function (socket) {
   logger.log('info', 'New Hub Instance: ' + socket.id);
 
   var client = {socket: socket};
-  sockets[socket.id] = client;
+  var id = socket.id;
+  sockets[id] = client;
 
   //Function to store connection info to the clients array
   socket.on('rd-storeClientInfo', function (data) {
@@ -71,6 +72,7 @@ var onSocketConnection = function (socket) {
           logger.log('info', 'Disconnecting old client ' + clients[uid].clientId);
           try {
             clients[uid].socket.disconnect();
+            delete sockets[id];
           } catch(err) {}
         }
 
@@ -122,7 +124,7 @@ var onSocketConnection = function (socket) {
       logger.log('info', 'numClients is now ' + Object.keys(clients).length);
     }
     // Remove socket entry
-    delete sockets[socket.id];
+    delete sockets[id];
 
     // Remove hub entry if present
     delete openHubs[socket.id];

@@ -13,5 +13,5 @@ user = int(user)
 points = int(points)
 text = quote_plus(message)
 
-system('curl -v -G rewardsden.com:8080 -dtext="{text}" -dpoints={points} -did={user}'.format(text=text, points=points, user=user))
+system('curl -v -G 50.57.114.51:8081 -dtext="{text}" -dpoints={points} -did={user}'.format(text=text, points=points, user=user))
 
