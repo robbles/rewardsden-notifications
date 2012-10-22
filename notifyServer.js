@@ -7,8 +7,8 @@ var util = require("util"),
     url = require('url');
 
 // How often and how many times to attempt to notify a client
-var repeatNotifyDelay = 1000;
-var repeatNotifyMax = 30;
+var repeatNotifyDelay = 5000;
+var repeatNotifyMax = 4;
 
 // log file location
 var logfile = path.existsSync('/rewardsden')?
@@ -17,13 +17,11 @@ var logfile = path.existsSync('/rewardsden')?
 //Create the logger
 var winston = require('winston');
 var logger = new (winston.Logger)({
-    transports: [
-      new (winston.transports.Console)(),
-      new (winston.transports.File)({ filename: logfile })
-    ]
-  });
-var repeatNotifyDelay = 1000;
-var repeatNotifyMax = 30;
+  transports: [
+    new (winston.transports.Console)(),
+    new (winston.transports.File)({ filename: logfile })
+  ]
+});
 
 // Configure socket.io server
 wsServer = io.listen(8080);
@@ -38,7 +36,7 @@ if(secure) {
   };
 
   // HTTPS version
-  wsServerSecure = io.listen(9080, options);
+  wsServerSecure = io.listen(8443, options);
   wsServerSecure.set('log level', 2);
 }
 
@@ -152,7 +150,6 @@ function adminStatUpdate(data) {
       clients: Object.keys(clients).length,     // Number of logged-in users
       connections: Object.keys(sockets).length  // Number of socket connections
     };
-    console.log(message);
     c.socket.emit('rd-adminUpdate', message);
     logger.log('info', "admin message sent");
   }
