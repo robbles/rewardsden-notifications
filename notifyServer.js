@@ -32,7 +32,7 @@ if(secure) {
   // Load key and certificate for HTTPS
   var options = {
     key: fs.readFileSync(__dirname + '/ssl/ssl.key'),
-    cert: fs.readFileSync(__dirname + '/ssl/ssl.crt')
+    cert: fs.readFileSync(__dirname + '/ssl/notifications.crt')
   };
 
   // HTTPS version
