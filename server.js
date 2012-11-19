@@ -1,17 +1,19 @@
-var util = require("util"),
-    io = require('socket.io'),
+/*jshint es5:true, laxcomma:true */
+var io = require('socket.io'),
+    express = require('express'),
     http = require('http'),
+    https = require('https'),
     fs = require('fs'),
-    path = require('path'),
-    os = require('os'),
     url = require('url');
 
 // How often and how many times to attempt to notify a client
 var repeatNotifyDelay = 5000;
 var repeatNotifyMax = 4;
+var insecurePort = 8080;
+var securePort = 8443;
 
 // log file location
-var logfile = path.existsSync('/rewardsden')?
+var logfile = fs.existsSync('/rewardsden')?
   '/rewardsden/nodeServer.log' : './nodeServer.log';
 
 //Create the logger
@@ -23,11 +25,17 @@ var logger = new (winston.Logger)({
   ]
 });
 
-// Configure socket.io server
-wsServer = io.listen(8080);
-wsServer.set('log level', 2);
+var app = express();
+app.use(express.static(__dirname + '/public'));
 
-var secure = path.existsSync(__dirname + '/ssl/ssl.key');
+var server = http.createServer(app).listen(insecurePort);
+
+var wsServer, wsServerSecure;
+wsServer = io.listen(server);
+
+console.log('Starting insecure notifications server on port ' + insecurePort);
+
+var secure = fs.existsSync(__dirname + '/ssl/ssl.key');
 if(secure) {
   // Load key and certificate for HTTPS
   var options = {
@@ -36,11 +44,23 @@ if(secure) {
   };
 
   // HTTPS version
-  var securePort = 8443;
   console.log('Starting secure notifications server on port ' + securePort);
-  wsServerSecure = io.listen(securePort, options);
-  wsServerSecure.set('log level', 1);
+
+  var secureServer = https.createServer(options, app).listen(securePort);
+  wsServerSecure = io.listen(secureServer);
 }
+wsServer.set('log level', 1);
+wsServerSecure.set('log level', 1);
+
+// TODO: make only ONE socket.io connection conditional on value of `secure`
+var numClients = 0;
+setInterval(function() {
+  var numClientsNow = wsServerSecure.sockets.manager.rooms[''].length;
+  if(numClientsNow !== numClients) {
+    numClients = numClientsNow;
+    console.log('Number of clients connected: ' + numClients);
+  }
+}, 1000);
 
 // Store all the current connections by user ID and socket ID
 var clients = Object.create(null);
@@ -162,7 +182,6 @@ function adminStatUpdate(data) {
 // for API server tech.rewardsden.com
 var phpServer = http.createServer(handler);
 phpServer.listen(8081);
-var url  = require('url');
 
 function handler (req, res) {
   res.writeHead(200);
