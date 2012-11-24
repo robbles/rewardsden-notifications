@@ -1,16 +1,20 @@
 /*jshint es5:true, laxcomma:true */
 var io = require('socket.io'),
     express = require('express'),
+    basicAuth = require('connect-basic-auth'),
     http = require('http'),
     https = require('https'),
     fs = require('fs'),
     url = require('url');
+
+var ClientManager = require('./manager').ClientManager;
 
 // How often and how many times to attempt to notify a client
 var repeatNotifyDelay = 5000;
 var repeatNotifyMax = 4;
 var insecurePort = 8080;
 var securePort = 8443;
+var username = 'admin', password = '5Xeaj8UX7q2d';
 
 // log file location
 var logfile = fs.existsSync('/rewardsden')?
@@ -26,14 +30,20 @@ var logger = new (winston.Logger)({
 });
 
 var app = express();
+app.use(basicAuth(function(credentials, req, res, next) {
+  if(credentials.username !== username || credentials.password !== password) {
+    return next(true);
+  }
+  return next(false);
+}, 'Please authenticate.'));
+
+app.use(function(req, res, next) {
+  req.requireAuthorization(req, res, next);
+});
+
 app.use(express.static(__dirname + '/public'));
 
-var server = http.createServer(app).listen(insecurePort);
-
-var wsServer, wsServerSecure;
-wsServer = io.listen(server);
-
-console.log('Starting insecure notifications server on port ' + insecurePort);
+var wsServer;
 
 var secure = fs.existsSync(__dirname + '/ssl/ssl.key');
 if(secure) {
@@ -47,119 +57,74 @@ if(secure) {
   console.log('Starting secure notifications server on port ' + securePort);
 
   var secureServer = https.createServer(options, app).listen(securePort);
-  wsServerSecure = io.listen(secureServer);
+  wsServer = io.listen(secureServer);
 }
+else {
+  console.log('Starting insecure notifications server on port ' + insecurePort);
+
+  var server = http.createServer(app).listen(insecurePort);
+  wsServer = io.listen(server);
+}
+
 wsServer.set('log level', 1);
-wsServerSecure.set('log level', 1);
+
+var manager = ClientManager(wsServer);
 
 // TODO: make only ONE socket.io connection conditional on value of `secure`
-var numClients = 0;
 setInterval(function() {
-  var numClientsNow = wsServerSecure.sockets.manager.rooms[''].length;
-  if(numClientsNow !== numClients) {
-    numClients = numClientsNow;
-    console.log('Number of clients connected: ' + numClients);
-  }
-}, 1000);
+  var numClients = manager.getNumConnections();
+  console.log('Number of clients connected: ' + numClients);
 
-// Store all the current connections by user ID and socket ID
-var clients = Object.create(null);
-var sockets = Object.create(null);
-var openHubs = Object.create(null);
+  var numOpenHubs = manager.getConnectionsWithStatus('/hub-open');
+  console.log('Number of clients with hub open: ' + numOpenHubs);
 
-//Store current logged in hubs
-var numLoggedInHubs = 0;
+  manager.notifyUser('rob', 'notification', {
+    type: 'simple',
+    message: 'hello world',
+  });
+
+}, 5000);
+
 
 //Run on every connection
 var onSocketConnection = function (socket) {
   logger.log('info', 'New Hub Instance: ' + socket.id);
 
-  var client = {socket: socket};
-  var id = socket.id;
-  sockets[id] = client;
-
   //Function to store connection info to the clients array
-  socket.on('rd-storeClientInfo', function (data) {
-    var uid = data.ruserId;
+  socket.on('register', function (data) {
+    var uid = data.id;
 
-    //Check for existing connection from this ID JUST in case it did not get removed from the "discconnect" call  
-    if(uid in clients) {
-        if(clients[uid].clientId === socket.id) {
-          // Same client, they just re-sent the rd-storeClientInfo message
-          logger.log('info', 'Received repeated rd-storeClientInfo message from ' + socket.id);
-        } else {
-          // disconnect other client
-          logger.log('info', 'Disconnecting old client ' + clients[uid].clientId);
-          try {
-            clients[uid].socket.disconnect();
-            delete sockets[id];
-          } catch(err) {}
-        }
-
-      delete clients[uid];
+    if(!uid) {
+      console.log('Error: no uid provided in register event');
+      return socket.disconnect();
     }
 
-    // Create new client record in the array
-    client.customId         = uid;
-    client.apiKey           = data.apiKey;
-    client.socket        = socket;
-    client.clientId         = socket.id;
-      
-    clients[uid] = client;
-    logger.log('info', 'New Connection rUser = '+client.customId+' from API Key ='+client.apiKey);
-    logger.log('info', 'numClients is now ' + Object.keys(clients).length);
-
-    if(uid === 'admin') {
-      // Send update to admin
-      adminStatUpdate();
-    }
+    manager.registerUser(socket, uid);
+    logger.log('info', 'User ' + uid + ' registered on socket ' + socket.id);
   });
 
   //Tracking hub open and close
-  socket.on('rd-hubStatusTrack', function (data) {
-    logger.log('info', 'rd-hubStatusTrack: ' + data);
-    var action = parseInt(data, 10);
-    if(action == 1) { // Hub opened
-      openHubs[socket.id] = true;
-    } else { // Hub closed
-      delete openHubs[socket.id];
-    }
-    logger.log('info', 'numOpenHubs is now ' + Object.keys(openHubs).length);
+  socket.on('status', function (data) {
+    logger.log('info', 'client status changed: ' + JSON.stringify(data.type));
 
-    adminStatUpdate();
+    switch(data.type) {
+      case 'hub-open':
+      logger.log('info', 'Hub opened by user');
+      return manager.addStatus(socket, 'hub-open');
+
+      case 'hub-close':
+      logger.log('info', 'Hub closed by user');
+      return manager.removeStatus(socket, 'hub-open');
+
+      default:
+      logger.log('warning', 'Unknown status from client: ' + JSON.stringify(data.status));
+      return;
+    }
   });
-  
-  // Run admin stats Update for every new connection
-  adminStatUpdate();
-
-  //Anytime user disconnects / refreshes the page
-  socket.on('disconnect', function (data) {
-    logger.log('info', "Socket disconnect:: id = " + socket.id);
-
-    // Removes the client entry from clients if we have the uid already
-    if('customId' in client) {
-      delete clients[client.customId];
-      logger.log('info', 'Disconnect:: rUser = '+client.customId);
-
-      logger.log('info', 'numClients is now ' + Object.keys(clients).length);
-    }
-    // Remove socket entry
-    delete sockets[id];
-
-    // Remove hub entry if present
-    delete openHubs[socket.id];
-
-    // Run adminStatUpdate for every disconnect
-    adminStatUpdate();
-
-  }); // end the disconnect
 
 }; // Close the main connection
 
 wsServer.sockets.on('connection', onSocketConnection);
-if(secure) {
-  wsServerSecure.sockets.on('connection', onSocketConnection);
-}
 
 //Admin Update Sender
 function adminStatUpdate(data) { 
@@ -180,10 +145,10 @@ function adminStatUpdate(data) {
 }
 
 // for API server tech.rewardsden.com
-var phpServer = http.createServer(handler);
-phpServer.listen(8081);
+var incomingServer = http.createServer(incomingHandler);
+incomingServer.listen(8081);
 
-function handler (req, res) {
+function incomingHandler (req, res) {
   res.writeHead(200);
 
   //Trigger notification to user
