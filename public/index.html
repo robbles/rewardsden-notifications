@@ -2,6 +2,14 @@
 <html>
 <head>
     <title>Notifications Testing</title>
+    <style>
+        .notification {
+            color: black;
+        }
+        .admin-update {
+            color: grey;
+        }
+    </style>
 </head>
 <body>
 <script src="/jquery.js"></script>
@@ -14,10 +22,15 @@
         console.log('Received a ping:');
         console.log(arguments);
     });
-    socket.on('notification', function (data) {
+    socket.on('rd-notify', function (data) {
         console.log('Received a notification:');
         console.log(data);
-        $('#messages').append(JSON.stringify(data) + '\n');
+        $('#messages').append('<p class="notification">' + JSON.stringify(data) + '</p>');
+    });
+    socket.on('rd-adminUpdate', function (data) {
+        console.log('Received a admin update:');
+        console.log(data);
+        $('#messages').append('<p class="admin-update">' + JSON.stringify(data) + '</p>');
     });
     socket.on('connect', function () {
         console.log('connected!');
@@ -29,12 +42,12 @@
         $('#register').click(function() {
             var id = $('#id').val();
             console.log('Registering as user ' + id);
-            socket.emit('register', {id: id});
+            socket.emit('rd-storeClientInfo', {ruserId: id});
         });
     });
 </script>
 <input type="text" id="id" placeholder="User ID"/>
 <button type="submit" id="register">Register</button>
-<pre id="messages"></pre>
+<div id="messages"></div>
 </body>
 </html>

@@ -5,6 +5,7 @@ var io = require('socket.io'),
     http = require('http'),
     https = require('https'),
     fs = require('fs'),
+    repl = require('repl'),
     url = require('url');
 
 var ClientManager = require('./manager').ClientManager;
@@ -14,7 +15,8 @@ var repeatNotifyDelay = 5000;
 var repeatNotifyMax = 4;
 var insecurePort = 8080;
 var securePort = 8443;
-var username = 'admin', password = '5Xeaj8UX7q2d';
+var username = 'admin',
+    password = '49fTKQQ4HN5mHSqTuQGClE2Ea4OaNXPc1qFrQWC0HumQwOCtqKoCxxtuhM3fTd1Q';
 
 // log file location
 var logfile = fs.existsSync('/rewardsden')?
@@ -70,18 +72,10 @@ wsServer.set('log level', 1);
 
 var manager = ClientManager(wsServer);
 
-// TODO: make only ONE socket.io connection conditional on value of `secure`
 setInterval(function() {
-  var numClients = manager.getNumConnections();
-  console.log('Number of clients connected: ' + numClients);
-
-  var numOpenHubs = manager.getConnectionsWithStatus('/hub-open');
-  console.log('Number of clients with hub open: ' + numOpenHubs);
-
-  manager.notifyUser('rob', 'notification', {
-    type: 'simple',
-    message: 'hello world',
-  });
+  if(manager.userIsRegistered('admin')) {
+    adminStatUpdate(manager);
+  }
 
 }, 5000);
 
@@ -91,8 +85,8 @@ var onSocketConnection = function (socket) {
   logger.log('info', 'New Hub Instance: ' + socket.id);
 
   //Function to store connection info to the clients array
-  socket.on('register', function (data) {
-    var uid = data.id;
+  socket.on('rd-storeClientInfo', function (data) {
+    var uid = data.ruserId;
 
     if(!uid) {
       console.log('Error: no uid provided in register event');
@@ -127,21 +121,17 @@ var onSocketConnection = function (socket) {
 wsServer.sockets.on('connection', onSocketConnection);
 
 //Admin Update Sender
-function adminStatUpdate(data) { 
-  // Get admin connection
-  if('admin' in clients) {
-    var c = clients.admin;
+function adminStatUpdate(manager) {
+  var numClients = manager.getNumConnections();
+  var numOpenHubs = manager.getConnectionsWithStatus('/hub-open');
+  var numLoggedInUsers = manager.getLoggedInUsers();
 
-    var message = {
-      activeHubs: Object.keys(sockets).length,  // Number of loaded hubs (connections)
-      loggedInHubs: numLoggedInHubs,            // Number of hubs where the user has logged in and opened  the hub
-      openHubs: Object.keys(openHubs).length,   // Number of open hubs
-      clients: Object.keys(clients).length,     // Number of logged-in users
-      connections: Object.keys(sockets).length  // Number of socket connections
-    };
-    c.socket.emit('rd-adminUpdate', message);
-    logger.log('info', "admin message sent");
-  }
+  var message = {
+    activeHubs: numClients,// Number of loaded hubs (connections)
+    openHubs: numOpenHubs, // Number of open hubs
+    clients: numLoggedInUsers,
+  };
+  manager.notifyUser('admin', 'rd-adminUpdate', message);
 }
 
 // for API server tech.rewardsden.com
@@ -149,24 +139,44 @@ var incomingServer = http.createServer(incomingHandler);
 incomingServer.listen(8081);
 
 function incomingHandler (req, res) {
-  res.writeHead(200);
 
   //Trigger notification to user
   var url_parts = url.parse(req.url, true);
   var query = url_parts.query;
+
+  // Check for required params
+  if(!('text' in query && 'points' in query && 'id' in query && 'key' in query)) {
+    res.writeHead(400);
+    return res.end();
+  }
+
   var text        = query.text;
   var points      = query.points;
   var userId      = query.id;
+  var apiKey = query.key;
+
+  if(apiKey !== password) {
+    res.writeHead(401);
+    return res.end('Unauthorized');
+  }
+
+  res.writeHead(200);
   logger.log('info', 'Request: ' + JSON.stringify(query));
-  
+
   repeatUntil(function() {
-    if(userId in clients) {
-      var c = clients[userId];
-      c.socket.emit('rd-notify',{rdResponseText: text, rdPoints: points});
+    if(manager.userIsRegistered(userId)) {
+
+      manager.notifyUser(userId, 'rd-notify', {
+        rdResponseText: text,
+        rdPoints: points
+      });
       logger.log('info', 'Notification went to rUser = '+userId+' Text = '+text+' points = '+points);
+
       return true;
     }
+
     logger.log('info', 'client ' + userId + ' not found, retrying in ' + repeatNotifyDelay);
+
     return false;
   }, repeatNotifyDelay, repeatNotifyMax);
 
@@ -190,3 +200,4 @@ var repeatUntil = function(callback, delay, maxTimes) {
 
   setTimeout(function() { repeatUntil(callback, delay, maxTimes - 1); }, delay);
 };
+

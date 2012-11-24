@@ -46,6 +46,20 @@ exports.ClientManager = function(server) {
 
     userIsRegistered: function(userId) {
       return (('/users/' + userId) in server.sockets.manager.rooms);
+    },
+
+    getLoggedInUsers: function() {
+      var roomCount = Object.keys(server.sockets.manager.rooms).length;
+
+      // Account for default room
+      roomCount -= 1;
+
+      // Account for hub-open status
+      if('/status/hub-open' in server.sockets.manager.rooms) {
+        roomCount -= 1;
+      }
+
+      return roomCount;
     }
   };
 
