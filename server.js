@@ -2,6 +2,7 @@
 var io = require('socket.io'),
     express = require('express'),
     basicAuth = require('connect-basic-auth'),
+    winston = require('winston'),
     http = require('http'),
     https = require('https'),
     fs = require('fs'),
@@ -12,7 +13,7 @@ var ClientManager = require('./manager').ClientManager;
 
 // How often and how many times to attempt to notify a client
 var repeatNotifyDelay = 5000;
-var repeatNotifyMax = 4;
+var repeatNotifyMax = 3;
 var insecurePort = 8080;
 var securePort = 8443;
 var username = 'admin',
@@ -20,16 +21,24 @@ var username = 'admin',
 
 // log file location
 var logfile = fs.existsSync('/rewardsden')?
-  '/rewardsden/nodeServer.log' : './nodeServer.log';
+  '/rewardsden/notifications.log' : './notifications.log';
 
-//Create the logger
-var winston = require('winston');
+var DEBUG_MODE = ('DEBUG_MODE' in process.env);
+var logTransports = [
+  new (winston.transports.File)({ filename: logfile, level: 'info' })
+];
+if(DEBUG_MODE) {
+  // Log debug statements to stderr
+  logTransports.push(new (winston.transports.Console)({level: 'debug'}));
+}
+
+// Create the logger
 var logger = new (winston.Logger)({
-  transports: [
-    new (winston.transports.Console)(),
-    new (winston.transports.File)({ filename: logfile })
-  ]
+  levels: (winston.config.syslog.levels),
+  transports: logTransports
 });
+// Only displayed if logging in debug mode
+logger.debug('Environment variable DEBUG_MODE detected, logging in DEBUG mode');
 
 var app = express();
 app.use(basicAuth(function(credentials, req, res, next) {
@@ -82,7 +91,7 @@ setInterval(function() {
 
 //Run on every connection
 var onSocketConnection = function (socket) {
-  logger.log('info', 'New Hub Instance: ' + socket.id);
+  logger.debug('New Hub Instance: ' + socket.id);
 
   //Function to store connection info to the clients array
   socket.on('rd-storeClientInfo', function (data) {
@@ -94,24 +103,22 @@ var onSocketConnection = function (socket) {
     }
 
     manager.registerUser(socket, uid);
-    logger.log('info', 'User ' + uid + ' registered on socket ' + socket.id);
+    logger.info('User ' + uid + ' registered on socket ' + socket.id);
   });
 
   //Tracking hub open and close
   socket.on('status', function (data) {
-    logger.log('info', 'client status changed: ' + JSON.stringify(data.type));
+    logger.info('client status changed: ' + JSON.stringify(data.type));
 
     switch(data.type) {
       case 'hub-open':
-      logger.log('info', 'Hub opened by user');
       return manager.addStatus(socket, 'hub-open');
 
       case 'hub-close':
-      logger.log('info', 'Hub closed by user');
       return manager.removeStatus(socket, 'hub-open');
 
       default:
-      logger.log('warning', 'Unknown status from client: ' + JSON.stringify(data.status));
+      logger.warning('Unknown status from client: ' + JSON.stringify(data.status));
       return;
     }
   });
@@ -156,12 +163,13 @@ function incomingHandler (req, res) {
   var apiKey = query.key;
 
   if(apiKey !== password) {
+    logger.warn('Unauthorized request: ' + JSON.stringify(query));
     res.writeHead(401);
     return res.end('Unauthorized');
   }
 
   res.writeHead(200);
-  logger.log('info', 'Request: ' + JSON.stringify(query));
+  logger.debug('Request: ' + JSON.stringify(query));
 
   repeatUntil(function() {
     if(manager.userIsRegistered(userId)) {
@@ -170,12 +178,12 @@ function incomingHandler (req, res) {
         rdResponseText: text,
         rdPoints: points
       });
-      logger.log('info', 'Notification went to rUser = '+userId+' Text = '+text+' points = '+points);
+      logger.info('Notification went to rUser = '+userId+' Text = '+text+' points = '+points);
 
       return true;
     }
 
-    logger.log('info', 'client ' + userId + ' not found, retrying in ' + repeatNotifyDelay);
+    logger.debug('client ' + userId + ' not found, retrying in ' + repeatNotifyDelay);
 
     return false;
   }, repeatNotifyDelay, repeatNotifyMax);
