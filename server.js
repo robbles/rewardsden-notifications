@@ -40,6 +40,7 @@ logger = new (winston.Logger)({
 logger.debug('Environment variable DEBUG_MODE detected, logging in DEBUG mode');
 
 var app = express();
+app.use(express.bodyParser());
 app.use(basicAuth(function(credentials, req, res, next) {
   if(credentials.username !== username || credentials.password !== password) {
     return next(true);
@@ -143,29 +144,27 @@ function adminStatUpdate(manager) {
 
 app.post('/notify/', function(req, res) {
 
-  //Trigger notification to user
-  var url_parts = url.parse(req.url, true);
-  var query = url_parts.query;
+  var data = req.body;
 
   // Check for required params
-  if(!('text' in query && 'points' in query && 'id' in query && 'key' in query)) {
+  if(!('text' in data && 'points' in data && 'id' in data && 'key' in data)) {
     res.writeHead(400);
     return res.end();
   }
 
-  var text        = query.text;
-  var points      = query.points;
-  var userId      = query.id;
-  var apiKey = query.key;
+  var text        = data.text;
+  var points      = data.points;
+  var userId      = data.id;
+  var apiKey = data.key;
 
   if(apiKey !== password) {
-    logger.warning('Unauthorized request: ' + JSON.stringify(query));
+    logger.warning('Unauthorized request: ' + JSON.stringify(data));
     res.writeHead(401);
     return res.end('Unauthorized');
   }
 
   res.writeHead(200);
-  logger.debug('Request: ' + JSON.stringify(query));
+  logger.debug('Request: ' + JSON.stringify(data));
 
   manager.notifyUser(userId, {
     rdResponseText: text,
