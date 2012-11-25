@@ -59,6 +59,9 @@
             var id = $('#id').val();
             console.log('Registering as user ' + id);
             socket.emit('rd-storeClientInfo', {ruserId: id});
+            socket.on('reconnect', function() {
+                socket.emit('rd-storeClientInfo', {ruserId: id});
+            });
             $(this).children('input,button').attr('disabled', 'true').blur();
             return false;
         });
