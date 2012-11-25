@@ -13,6 +13,7 @@ var ClientManager = require('./manager').ClientManager;
 // How often and how many times to attempt to notify a client
 var repeatNotifyDelay = 5000;
 var repeatNotifyMax = 3;
+
 var insecurePort = 8080;
 var securePort = 8443;
 var username = 'admin',
@@ -30,8 +31,8 @@ if(DEBUG_MODE) {
   logTransports.push(new (winston.transports.Console)({level: 'debug'}));
 }
 
-// Create the logger
-var logger = new (winston.Logger)({
+// Create the logger as a global object
+logger = new (winston.Logger)({
   levels: (winston.config.syslog.levels),
   transports: logTransports
 });
@@ -137,7 +138,7 @@ function adminStatUpdate(manager) {
     openHubs: numOpenHubs, // Number of open hubs
     clients: numLoggedInUsers,
   };
-  manager.notifyUser('admin', 'rd-adminUpdate', message);
+  manager.sendMessageToUser('admin', 'rd-adminUpdate', message);
 }
 
 app.post('/notify/', function(req, res) {
@@ -166,41 +167,15 @@ app.post('/notify/', function(req, res) {
   res.writeHead(200);
   logger.debug('Request: ' + JSON.stringify(query));
 
-  repeatUntil(function() {
-    if(manager.userIsRegistered(userId)) {
-
-      manager.notifyUser(userId, 'rd-notify', {
-        rdResponseText: text,
-        rdPoints: points
-      });
-      logger.info('Notification went to rUser = '+userId+' Text = '+text+' points = '+points);
-
-      return true;
-    }
-
-    logger.debug('client ' + userId + ' not found, retrying in ' + repeatNotifyDelay);
-
-    return false;
-  }, repeatNotifyDelay, repeatNotifyMax);
+  manager.notifyUser(userId, {
+    rdResponseText: text,
+    rdPoints: points
+  }, repeatNotifyMax, repeatNotifyDelay);
 
   res.end();
+
+  // Void request/response references to make sure we avoid memory leaks
+  req = null;
+  res = null;
 });
-
-/**
- * Calls a given function repeatedly until it returns true or at least max
- * times, with delay ms between invocations.
- */
-var repeatUntil = function(callback, delay, maxTimes) {
-  if(maxTimes === 0) { return; }
-
-  try {
-    if(callback() === true) {
-      return;
-    }
-  } catch(e) {
-    console.error(e);
-  }
-
-  setTimeout(function() { repeatUntil(callback, delay, maxTimes - 1); }, delay);
-};
 

@@ -1,4 +1,5 @@
 /*jshint es5:true, laxcomma:true */
+var utils = require('./utils');
 
 exports.ClientManager = function(server) {
   var self = {
@@ -39,11 +40,6 @@ exports.ClientManager = function(server) {
       socket.join('users/' + userId);
     },
 
-    notifyUser: function(user, eventName, message) {
-      // TODO check first for existence and retry
-      server.sockets.in('users/' + user).emit(eventName, message);
-    },
-
     userIsRegistered: function(userId) {
       return (('/users/' + userId) in server.sockets.manager.rooms);
     },
@@ -60,8 +56,43 @@ exports.ClientManager = function(server) {
       }
 
       return roomCount;
-    }
+    },
+
+    sendMessageToUser: function(user, eventName, message) {
+      server.sockets.in('users/' + user).emit(eventName, message);
+    },
+
+    notifyUser: function(user, message, repeatRetries, repeatDelay) {
+      // Decouple from calling function to speed up response
+      process.nextTick(function() {
+
+        // Keep trying to send the message up to repeatRetries times, with delay of repeatDelay ms
+        utils.repeatUntil(function(attempts) {
+          try {
+            if(self.userIsRegistered(user)) {
+
+              self.sendMessageToUser(user, 'rd-notify', message);
+
+              logger.info('Notification went to user = '+user+': ' + JSON.stringify(message));
+              return true;
+            }
+
+            if(attempts !== repeatRetries) {
+              logger.debug('Attempt ' + attempts + ' client ' + user + ' not found, retrying in ' + repeatDelay);
+            } else {
+              logger.warning('Failed to send message to ' + user + ' after ' + attempts + ' attempts');
+            }
+          } catch(err) {
+            logger.error('Exception delivering message: ' + err);
+          }
+
+          return false;
+        }, repeatDelay, repeatRetries);
+      });
+    },
+
   };
 
   return self;
 };
+
