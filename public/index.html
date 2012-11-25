@@ -3,11 +3,27 @@
 <head>
     <title>Notifications Testing</title>
     <style>
+        body {
+            width: 600px;
+            margin: 0 auto;
+            padding-top: 40px;
+        }
+        input, button {
+            padding: 14px;
+            font-size: 1.5em;
+        }
+        input {
+            width: 300px;
+        }
         .notification {
             color: black;
         }
         .admin-update {
             color: grey;
+        }
+        #admin-messages {
+            font-size: 1.2em;
+            font-family: monospace;
         }
     </style>
 </head>
@@ -30,7 +46,7 @@
     socket.on('rd-adminUpdate', function (data) {
         console.log('Received a admin update:');
         console.log(data);
-        $('#messages').append('<p class="admin-update">' + JSON.stringify(data) + '</p>');
+        $('#admin-messages').html('<p class="admin-update">' + JSON.stringify(data) + '</p>');
     });
     socket.on('connect', function () {
         console.log('connected!');
@@ -39,15 +55,20 @@
         console.log('disconnected!');
     });
     $(function() {
-        $('#register').click(function() {
+        $('form').submit(function() {
             var id = $('#id').val();
             console.log('Registering as user ' + id);
             socket.emit('rd-storeClientInfo', {ruserId: id});
+            $(this).children('input,button').attr('disabled', 'true').blur();
+            return false;
         });
     });
 </script>
-<input type="text" id="id" placeholder="User ID"/>
-<button type="submit" id="register">Register</button>
+<form>
+    <input type="text" id="id" placeholder="User ID" autofocus=true />
+    <button type="submit" id="register">Register</button>
+</form>
+<div id="admin-messages"></div>
 <div id="messages"></div>
 </body>
 </html>
