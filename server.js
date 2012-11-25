@@ -19,8 +19,7 @@ var username = 'admin',
     password = '49fTKQQ4HN5mHSqTuQGClE2Ea4OaNXPc1qFrQWC0HumQwOCtqKoCxxtuhM3fTd1Q';
 
 // log file location
-var logfile = fs.existsSync('/rewardsden')?
-  '/rewardsden/notifications.log' : './notifications.log';
+var logfile = __dirname + '/notifications.log';
 
 var DEBUG_MODE = ('DEBUG_MODE' in process.env);
 var logTransports = [
