@@ -22,6 +22,7 @@ var username = 'admin',
 // log file location
 var logfile = fs.existsSync('/rewardsden')?
   '/rewardsden/notifications.log' : './notifications.log';
+console.log(logfile);
 
 var DEBUG_MODE = ('DEBUG_MODE' in process.env);
 var logTransports = [
@@ -65,19 +66,21 @@ if(secure) {
   };
 
   // HTTPS version
-  console.log('Starting secure notifications server on port ' + securePort);
+  logger.warning('Starting secure notifications server on port ' + securePort);
 
   var secureServer = https.createServer(options, app).listen(securePort);
   wsServer = io.listen(secureServer);
 }
 else {
-  console.log('Starting insecure notifications server on port ' + insecurePort);
+  logger.warning('Starting insecure notifications server on port ' + insecurePort);
 
   var server = http.createServer(app).listen(insecurePort);
   wsServer = io.listen(server);
 }
 
 wsServer.set('log level', 1);
+
+logger.warning('Server started');
 
 var manager = ClientManager(wsServer);
 
@@ -163,7 +166,7 @@ function incomingHandler (req, res) {
   var apiKey = query.key;
 
   if(apiKey !== password) {
-    logger.warn('Unauthorized request: ' + JSON.stringify(query));
+    logger.warning('Unauthorized request: ' + JSON.stringify(query));
     res.writeHead(401);
     return res.end('Unauthorized');
   }
