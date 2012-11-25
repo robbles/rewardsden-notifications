@@ -6,13 +6,14 @@ var io = require('socket.io'),
     http = require('http'),
     https = require('https'),
     fs = require('fs'),
+    os = require('os'),
     url = require('url');
 
 var ClientManager = require('./manager').ClientManager;
 
 // How often and how many times to attempt to notify a client
 var repeatNotifyDelay = 5000;
-var repeatNotifyMax = 3;
+var repeatNotifyMax = 2;
 
 var insecurePort = 8080;
 var securePort = 8443;
@@ -133,16 +134,30 @@ function adminStatUpdate(manager) {
   var numClients = manager.getNumConnections();
   var numOpenHubs = manager.getConnectionsWithStatus('/hub-open');
   var numLoggedInUsers = manager.getLoggedInUsers();
+  var freeMem = os.freemem();
+  var totalMem = os.totalmem();
 
   var message = {
     activeHubs: numClients,// Number of loaded hubs (connections)
     openHubs: numOpenHubs, // Number of open hubs
     clients: numLoggedInUsers,
+    freeMemory: freeMem / 1024 / 1024,
+    totalMemory: totalMem / 1024 / 1024,
+    responseTimeAvg: responseTimeAvg,
   };
   manager.sendMessageToUser('admin', 'rd-adminUpdate', message);
 }
 
+// Keep track of HTTP response time
+var responseTimeAvg = null;
+var responseTimeLock = false;
+
 app.post('/notify/', function(req, res) {
+  var responseTimeStart;
+  if(!responseTimeLock) {
+    responseTimeLock = true;
+    responseTimeStart = process.hrtime();
+  }
 
   var data = req.body;
 
@@ -152,10 +167,14 @@ app.post('/notify/', function(req, res) {
     return res.end();
   }
 
+  // Required params
   var text        = data.text;
   var points      = data.points;
   var userId      = data.id;
   var apiKey = data.key;
+
+  // Optional `bonus` key is passed along to client
+  var bonus = (typeof data.bonus === 'undefined')? false : data.bonus;
 
   if(apiKey !== password) {
     logger.warning('Unauthorized request: ' + JSON.stringify(data));
@@ -168,10 +187,19 @@ app.post('/notify/', function(req, res) {
 
   manager.notifyUser(userId, {
     rdResponseText: text,
-    rdPoints: points
+    rdPoints: points,
+    bonus: bonus
   }, repeatNotifyMax, repeatNotifyDelay);
 
   res.end();
+
+  // Record total time processing request
+  if(responseTimeLock) {
+    responseTimeLock = false;
+    var responseTimeDiff = process.hrtime(responseTimeStart);
+    var ms = responseTimeDiff[1] / 1000000 + responseTimeDiff[0] * 1000;
+    responseTimeAvg = (responseTimeAvg * 0.8) + (ms * 0.2);
+  }
 
   // Void request/response references to make sure we avoid memory leaks
   req = null;
