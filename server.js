@@ -6,7 +6,6 @@ var io = require('socket.io'),
     http = require('http'),
     https = require('https'),
     fs = require('fs'),
-    repl = require('repl'),
     url = require('url');
 
 var ClientManager = require('./manager').ClientManager;
@@ -22,7 +21,6 @@ var username = 'admin',
 // log file location
 var logfile = fs.existsSync('/rewardsden')?
   '/rewardsden/notifications.log' : './notifications.log';
-console.log(logfile);
 
 var DEBUG_MODE = ('DEBUG_MODE' in process.env);
 var logTransports = [
@@ -49,7 +47,7 @@ app.use(basicAuth(function(credentials, req, res, next) {
   return next(false);
 }, 'Please authenticate.'));
 
-app.use(function(req, res, next) {
+app.get('*', function(req, res, next) {
   req.requireAuthorization(req, res, next);
 });
 
@@ -66,13 +64,13 @@ if(secure) {
   };
 
   // HTTPS version
-  logger.warning('Starting secure notifications server on port ' + securePort);
+  logger.info('Starting secure notifications server on port ' + securePort);
 
   var secureServer = https.createServer(options, app).listen(securePort);
   wsServer = io.listen(secureServer);
 }
 else {
-  logger.warning('Starting insecure notifications server on port ' + insecurePort);
+  logger.info('Starting insecure notifications server on port ' + insecurePort);
 
   var server = http.createServer(app).listen(insecurePort);
   wsServer = io.listen(server);
@@ -80,7 +78,7 @@ else {
 
 wsServer.set('log level', 1);
 
-logger.warning('Server started');
+logger.info('Server started');
 
 var manager = ClientManager(wsServer);
 
@@ -88,7 +86,6 @@ setInterval(function() {
   if(manager.userIsRegistered('admin')) {
     adminStatUpdate(manager);
   }
-
 }, 5000);
 
 
@@ -144,11 +141,7 @@ function adminStatUpdate(manager) {
   manager.notifyUser('admin', 'rd-adminUpdate', message);
 }
 
-// for API server tech.rewardsden.com
-var incomingServer = http.createServer(incomingHandler);
-incomingServer.listen(8081);
-
-function incomingHandler (req, res) {
+app.post('/notify/', function(req, res) {
 
   //Trigger notification to user
   var url_parts = url.parse(req.url, true);
@@ -192,7 +185,7 @@ function incomingHandler (req, res) {
   }, repeatNotifyDelay, repeatNotifyMax);
 
   res.end();
-}
+});
 
 /**
  * Calls a given function repeatedly until it returns true or at least max
