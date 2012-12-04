@@ -57,6 +57,9 @@ app.use(express.static(__dirname + '/public'));
 
 var wsServer;
 
+logger.info('Starting insecure notifications server on port ' + insecurePort);
+var insecureServer = http.createServer(app).listen(insecurePort);
+
 var secure = fs.existsSync(__dirname + '/ssl/ssl.key');
 if(secure) {
   // Load key and certificate for HTTPS
@@ -72,10 +75,7 @@ if(secure) {
   wsServer = io.listen(secureServer);
 }
 else {
-  logger.info('Starting insecure notifications server on port ' + insecurePort);
-
-  var server = http.createServer(app).listen(insecurePort);
-  wsServer = io.listen(server);
+  wsServer = io.listen(insecureServer);
 }
 
 wsServer.set('log level', 1);
