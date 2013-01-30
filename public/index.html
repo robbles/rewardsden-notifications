@@ -47,7 +47,7 @@
     socket.on('rd-adminUpdate', function (data) {
         console.log('Received a admin update:');
         console.log(data);
-        $('#admin-messages').html('<p class="admin-update">' + JSON.stringify(data) + '</p>');
+        $('#admin-messages').html('<pre class="admin-update">' + JSON.stringify(data, undefined, 4) + '</pre>');
     });
     socket.on('connect', function () {
         console.log('connected!');
