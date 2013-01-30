@@ -40,6 +40,9 @@ logger = new (winston.Logger)({
 // Only displayed if logging in debug mode
 logger.debug('Environment variable DEBUG_MODE detected, logging in DEBUG mode');
 
+// Keep track of number of connections from each platform (by API key)
+var platformConnections = {};
+
 var app = express();
 app.use(express.bodyParser());
 app.use(basicAuth(function(credentials, req, res, next) {
@@ -98,6 +101,17 @@ var onSocketConnection = function (socket) {
   //Function to store connection info to the clients array
   socket.on('rd-storeClientInfo', function (data) {
     var uid = data.ruserId;
+    var apiKey = data.apiKey;
+
+    try {
+      if(apiKey) {
+        if(apiKey in platformConnections) {
+          platformConnections[apiKey] += 1;
+        } else {
+          platformConnections[apiKey] = 1;
+        }
+      }
+    } catch(e) {}
 
     if(!uid) {
       console.log('Error: no uid provided in register event');
@@ -144,6 +158,7 @@ function adminStatUpdate(manager) {
     freeMemory: freeMem / 1024 / 1024,
     totalMemory: totalMem / 1024 / 1024,
     responseTimeAvg: responseTimeAvg,
+    platformConnections: platformConnections,
   };
   manager.sendMessageToUser('admin', 'rd-adminUpdate', message);
 }
