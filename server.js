@@ -159,6 +159,7 @@ function adminStatUpdate(manager) {
     totalMemory: totalMem / 1024 / 1024,
     responseTimeAvg: responseTimeAvg,
     platformConnections: platformConnections,
+    uptime: process.uptime()
   };
   manager.sendMessageToUser('admin', 'rd-adminUpdate', message);
 }
